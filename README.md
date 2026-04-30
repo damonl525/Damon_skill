@@ -7,6 +7,7 @@
 | 技能名称 | 描述 | 用途 |
 |----------|------|------|
 | [PDF Batch Extractor](./pdf-batch-extractor/) | 批量提取PDF文件为Markdown格式 | 文档处理、内容提取 |
+| [Statistical Review Summary](./stat-review-summary/) | 临床统计师总结参考研究资料的标准化模板 | 临床研究、监管文件、文献回顾 |
 
 ## 使用方法
 
