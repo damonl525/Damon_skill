@@ -56,12 +56,13 @@ Claude 会：
 
 ## 输出示例
 
-参考 `Proposed_Score_Method_PPT.pptx` 的 18 页演示文稿，包含：
+参考 `Proposed_Score_Method_PPT.pptx` 的 24 页演示文稿，包含：
 - 公式框（Cardano 公式、Z 统计量）
 - 对比表格（四种 CI 方法）
 - 代码块（R 和 SAS 代码片段）
 - 警告提示框（边界场景、SAS missing 值陷阱）
 - 流程图（MI → Score → Rubin → CI）
+- 行业分析（FDA 监管现状、MOVER 竞争方法）
 
 ## 依赖
 
@@ -85,4 +86,5 @@ md-to-pptx/
 
 ## 版本历史
 
+- **v1.1** (2026-05-18): 修复 `_emu()` 参数单位 bug — 所有 position/size 参数自动转为 Inches()
 - **v1.0** (2026-05-14): 初始版本，支持 PPTX + HTML 双输出
