@@ -278,6 +278,8 @@ Typical range: 12-25 slides for a 20-40 minute talk.
 3. Run: `python gen_pptx.py`
 4. Dependencies: `pip install python-pptx`
 
+> **Note**: All position/size parameters in helpers now auto-convert bare `int`/`float` to `Inches()` via the internal `_emu()` function. You can safely pass `0.5` or `Inches(0.5)` — both work. This prevents the common bug where a bare number is treated as EMU (invisible on slide).
+
 #### HTML Path
 
 1. Read `references/html_template.html` for the complete CSS/HTML framework

@@ -21,6 +21,18 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
 
+
+def _emu(v):
+    """Convert bare int/float to Inches; pass through EMU/Inches values unchanged.
+
+    python-pptx expects EMU units for position/size parameters. Passing a bare
+    number like 0.5 results in 0.5 EMU (invisible). This helper prevents that
+    by auto-wrapping int/float in Inches().
+    """
+    if isinstance(v, (int, float)):
+        return Inches(v)
+    return v
+
 # ══════════════════════════════════════════════════════════════════════════════
 # STYLE CONSTANTS — Customize these to change the visual theme
 # ══════════════════════════════════════════════════════════════════════════════
@@ -105,7 +117,7 @@ def add_slide(prs, blank_layout):
 
 def add_tb(slide, left, top, width, height):
     """Add a textbox at the specified position."""
-    return slide.shapes.add_textbox(left, top, width, height)
+    return slide.shapes.add_textbox(_emu(left), _emu(top), _emu(width), _emu(height))
 
 
 def set_text(tf, text, sz=SZ_BODY, bold=False, color=BLACK, align=PP_ALIGN.LEFT):
@@ -141,7 +153,7 @@ def add_para(tf, text, sz=SZ_BODY, bold=False, color=BLACK,
 def add_bg(slide, left, top, w, h, fill, border_color=None):
     """Add a rounded rectangle background shape."""
     s = slide.shapes.add_shape(
-        MSO_SHAPE.ROUNDED_RECTANGLE, left, top, w, h
+        MSO_SHAPE.ROUNDED_RECTANGLE, _emu(left), _emu(top), _emu(w), _emu(h)
     )
     s.fill.solid()
     s.fill.fore_color.rgb = fill
@@ -205,6 +217,7 @@ def add_formula(slide, text, left, top, width, height):
 
     text: multi-line string (each line becomes a paragraph)
     """
+    left, top, width, height = _emu(left), _emu(top), _emu(width), _emu(height)
     add_bg(slide, left, top, width, height, ACCENT_BG, ACCENT_LIGHT)
     bar = slide.shapes.add_shape(
         MSO_SHAPE.RECTANGLE, left, top, Inches(0.05), height
@@ -235,6 +248,7 @@ def add_callout(slide, title, body, left, top, width, height, warn=False):
     body: multi-line string body text
     warn: True for red warning style, False for green info style
     """
+    left, top, width, height = _emu(left), _emu(top), _emu(width), _emu(height)
     if warn:
         bg_c, bd_c, tx_c = RED_BG, RED, DARK_RED
     else:
@@ -272,6 +286,7 @@ def add_code(slide, text, left, top, width, height):
 
     text: multi-line string code content
     """
+    left, top, width, height = _emu(left), _emu(top), _emu(width), _emu(height)
     add_bg(slide, left, top, width, height, CODE_BG, BORDER)
     tb = add_tb(slide, left + Inches(0.2), top + Inches(0.1),
                 width - Inches(0.4), height - Inches(0.18))
@@ -300,7 +315,7 @@ def add_table(slide, headers, rows, left, top, width, height):
         raise ValueError("rows cannot be empty — use add_bg for empty placeholders")
     n_rows = len(rows) + 1
     n_cols = len(headers)
-    tbl_shape = slide.shapes.add_table(n_rows, n_cols, left, top, width, height)
+    tbl_shape = slide.shapes.add_table(n_rows, n_cols, _emu(left), _emu(top), _emu(width), _emu(height))
     tbl = tbl_shape.table
 
     # Header row
@@ -338,6 +353,7 @@ def add_flow_boxes(slide, items, top, box_height=Inches(0.9)):
     """
     if not items:
         raise ValueError("items cannot be empty")
+    top, box_height = _emu(top), _emu(box_height)
     box_w = Inches(2.6)
     for text, left in items:
         add_bg(slide, left, top, box_w, box_height, ACCENT_BG, ACCENT_LIGHT)
@@ -381,6 +397,9 @@ def add_comparison(slide, left_title, left_items, right_title, right_items,
     right_items: list of bullet point strings for right box
     left_warn: True = left box is warning (red), False = left box is info (green)
     """
+    left_pos, right_pos, top, width, height = (
+        _emu(left_pos), _emu(right_pos), _emu(top), _emu(width), _emu(height)
+    )
     # Left box
     left_bg = RED_BG if left_warn else ACCENT_BG
     left_bd = RED if left_warn else ACCENT_LIGHT
@@ -447,7 +466,7 @@ def add_bullet_list(slide, items, left, top, width, height,
     """Add a simple bullet list."""
     if not items:
         raise ValueError("items cannot be empty")
-    tb = add_tb(slide, left, top, width, height)
+    tb = add_tb(slide, _emu(left), _emu(top), _emu(width), _emu(height))
     tf = tb.text_frame
     tf.word_wrap = True
     for i, item in enumerate(items):
