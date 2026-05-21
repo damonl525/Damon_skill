@@ -23,13 +23,15 @@ from pptx.enum.shapes import MSO_SHAPE
 
 
 def _emu(v):
-    """Convert bare int/float to Inches; pass through EMU/Inches values unchanged.
+    """Convert bare number to EMU via Inches(); pass through pre-converted values.
 
-    python-pptx expects EMU units for position/size parameters. Passing a bare
-    number like 0.5 results in 0.5 EMU (invisible). This helper prevents that
-    by auto-wrapping int/float in Inches().
+    python-pptx uses EMU units (914400 per inch). Inches() returns an int (Emu
+    subclass), so isinstance(v, int) matches pre-converted values too. We use a
+    heuristic: ints > 100 are already EMU (since slide coordinates are < 14).
     """
-    if isinstance(v, (int, float)):
+    if isinstance(v, int):
+        return v if v > 100 else Inches(v)
+    if isinstance(v, float):
         return Inches(v)
     return v
 
@@ -70,6 +72,11 @@ RED         = RGBColor(0xD0, 0x00, 0x00)   # Warning accent
 RED_BG      = RGBColor(0xFC, 0xE4, 0xE4)   # Warning background
 CODE_BG     = RGBColor(0xF0, 0xF0, 0xF0)   # Code block background
 BORDER      = RGBColor(0xDE, 0xE2, 0xE6)   # Borders
+
+# Alignment shortcuts (AI models often use these instead of PP_ALIGN.XXX)
+LEFT   = PP_ALIGN.LEFT
+CENTER = PP_ALIGN.CENTER
+RIGHT  = PP_ALIGN.RIGHT
 DARK_GREEN  = RGBColor(0x1B, 0x43, 0x32)   # Formula text
 DARK_RED    = RGBColor(0x64, 0x12, 0x20)   # Warning text
 
@@ -211,6 +218,20 @@ def add_section(slide, text, top=Inches(0.25)):
     ln.line.fill.background()
 
 
+def add_h3(slide, text, top=Inches(0.3)):
+    """Add H3 sub-heading (bold, no underline bar)."""
+    tb = add_tb(slide, CONTENT_LEFT, top, CONTENT_WIDTH, Inches(0.45))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    p = tf.paragraphs[0]
+    r = p.add_run()
+    r.text = text
+    r.font.size = Pt(SZ_H3)
+    r.font.bold = True
+    r.font.color.rgb = BLACK
+    r.font.name = FN
+
+
 def add_formula(slide, text, left, top, width, height):
     """
     Add a formula box with green background and left accent bar.
@@ -315,8 +336,12 @@ def add_table(slide, headers, rows, left, top, width, height):
         raise ValueError("rows cannot be empty — use add_bg for empty placeholders")
     n_rows = len(rows) + 1
     n_cols = len(headers)
-    tbl_shape = slide.shapes.add_table(n_rows, n_cols, _emu(left), _emu(top), _emu(width), _emu(height))
+    left, top, width, height = _emu(left), _emu(top), _emu(width), _emu(height)
+    tbl_shape = slide.shapes.add_table(n_rows, n_cols, left, top, width, height)
     tbl = tbl_shape.table
+    col_w = int(width / n_cols)
+    for j in range(n_cols):
+        tbl.columns[j].width = col_w
 
     # Header row
     for j, h in enumerate(headers):
@@ -462,7 +487,7 @@ def add_comparison(slide, left_title, left_items, right_title, right_items,
 # ══════════════════════════════════════════════════════════════════════════════
 
 def add_bullet_list(slide, items, left, top, width, height,
-                    sz=SZ_LIST, color=BLACK, bullet='• '):
+                    sz=SZ_LIST, bold=False, color=BLACK, bullet='• '):
     """Add a simple bullet list."""
     if not items:
         raise ValueError("items cannot be empty")
@@ -478,8 +503,228 @@ def add_bullet_list(slide, items, left, top, width, height,
         r = p.add_run()
         r.text = bullet + item
         r.font.size = Pt(sz)
+        r.font.bold = bold
         r.font.color.rgb = color
         r.font.name = FN
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# AUTO-LAYOUT (Recommended — no manual coordinates needed)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class Layout:
+    """Auto-layout manager: stack elements vertically without coordinates.
+
+    Tracks a Y cursor and auto-positions each element below the previous one.
+    Height is estimated from content. Returns self for chaining.
+
+    Usage:
+        prs, layout = create_presentation()
+        total = 8
+
+        s = add_slide(prs, layout)
+        lm = Layout(s)
+        lm.title("Score Method for Missing Data")
+        lm.subtitle("Rubin's Rules & Variance Estimation")
+        lm.bullets(["Obj 1", "Obj 2", "Obj 3"])
+        lm.slide_num(1, total)
+
+        prs.save("output.pptx")
+    """
+
+    _TOP = 0.2
+    _BOTTOM = 0.45
+    _GAP = 0.15
+
+    def __init__(self, slide):
+        self._slide = slide
+        self._y = self._TOP
+
+    @property
+    def remaining(self):
+        """Remaining usable height (inches) before bottom margin."""
+        return 7.5 - self._y - self._BOTTOM
+
+    @property
+    def cursor(self):
+        """Current Y position (inches from top)."""
+        return self._y
+
+    def reset(self):
+        """Reset cursor to top (for reusing Layout on a new slide)."""
+        self._y = self._TOP
+        return self
+
+    def _advance(self, height):
+        y = self._y
+        self._y += height + self._GAP
+        return y
+
+    def gap(self, inches=0.2):
+        """Add explicit vertical gap."""
+        self._y += inches
+        return self
+
+    def advance(self, inches):
+        """Manually advance cursor (for mixing auto + manual layouts)."""
+        self._y += inches
+        return self
+
+    # ── Slide-level ──
+
+    def slide_num(self, num, total):
+        """Add slide number (bottom-right, no cursor advance)."""
+        add_slide_num(self._slide, num, total)
+        return self
+
+    # ── Text ──
+
+    def title(self, text):
+        """Add slide title (large, green, bold)."""
+        y = self._advance(0.8)
+        add_title(self._slide, text, top=_emu(y))
+        return self
+
+    def subtitle(self, text):
+        """Add subtitle (gray, smaller)."""
+        y = self._advance(0.6)
+        add_subtitle(self._slide, text, top=_emu(y))
+        return self
+
+    def section(self, text):
+        """Add section heading with green underline bar."""
+        y = self._advance(0.85)
+        add_section(self._slide, text, top=_emu(y))
+        return self
+
+    def h3(self, text):
+        """Add H3 sub-heading (bold, no underline)."""
+        y = self._advance(0.5)
+        add_h3(self._slide, text, top=_emu(y))
+        return self
+
+    # ── Content (full-width, auto-height) ──
+
+    def bullets(self, items, sz=SZ_LIST, bold=False):
+        """Add bullet list. Height auto-estimated from item count."""
+        h = max(0.5, len(items) * 0.38 + 0.1)
+        y = self._advance(h)
+        add_bullet_list(self._slide, items, CONTENT_LEFT, _emu(y),
+                        CONTENT_WIDTH, _emu(h), sz=sz, bold=bold)
+        return self
+
+    def formula(self, text):
+        """Add formula box. Height auto-estimated from line count."""
+        lines = text.strip().count('\n') + 1
+        h = max(0.6, lines * 0.35 + 0.3)
+        y = self._advance(h)
+        add_formula(self._slide, text, CONTENT_LEFT, _emu(y),
+                    CONTENT_WIDTH, _emu(h))
+        return self
+
+    def code(self, text):
+        """Add code block. Height auto-estimated from line count."""
+        lines = text.strip().count('\n') + 1
+        h = max(0.5, lines * 0.25 + 0.2)
+        y = self._advance(h)
+        add_code(self._slide, text, CONTENT_LEFT, _emu(y),
+                 CONTENT_WIDTH, _emu(h))
+        return self
+
+    def callout(self, title, body, warn=False):
+        """Add callout box (info or warning). Height auto-estimated."""
+        lines = body.strip().count('\n') + 1
+        h = max(0.7, lines * 0.3 + 0.55)
+        y = self._advance(h)
+        add_callout(self._slide, title, body, CONTENT_LEFT, _emu(y),
+                    CONTENT_WIDTH, _emu(h), warn=warn)
+        return self
+
+    def table(self, headers, rows):
+        """Add table. Height auto-estimated from row count."""
+        h = max(0.7, (len(rows) + 1) * 0.38 + 0.1)
+        y = self._advance(h)
+        add_table(self._slide, headers, rows, CONTENT_LEFT, _emu(y),
+                  CONTENT_WIDTH, _emu(h))
+        return self
+
+    # ── Composite (multi-element patterns) ──
+
+    def comparison(self, left_title, left_items, right_title, right_items,
+                   left_warn=True):
+        """Add side-by-side comparison boxes (red vs green)."""
+        h = 2.0
+        y = self._advance(h)
+        add_comparison(self._slide, left_title, left_items,
+                       right_title, right_items, top=_emu(y),
+                       left_warn=left_warn)
+        return self
+
+    def flow(self, items, box_height=0.9):
+        """Add flow diagram. items: list of text strings (auto-positioned)."""
+        y = self._advance(box_height)
+        n = len(items)
+        if n == 0:
+            return self
+        box_w_in = 2.6
+        arrow_in = 0.4
+        total_needed = n * box_w_in + (n - 1) * arrow_in
+        start_x = 0.5 + (12.3 - total_needed) / 2
+        positioned = []
+        for i, text in enumerate(items):
+            x = start_x + i * (box_w_in + arrow_in)
+            positioned.append((text, _emu(x)))
+        add_flow_boxes(self._slide, positioned, top=_emu(y),
+                       box_height=_emu(box_height))
+        return self
+
+    # ── Two-column layouts ──
+
+    def two_col_bullets(self, left_title, left_items, right_title, right_items):
+        """Two columns: h3 title + bullet list in each column."""
+        max_n = max(len(left_items), len(right_items))
+        h = max(1.5, max_n * 0.38 + 0.65)
+        y = self._advance(h)
+        # Left
+        tb_l = add_tb(self._slide, COL_L_LEFT, _emu(y), COL_W, _emu(0.5))
+        set_text(tb_l.text_frame, left_title, sz=SZ_H3, bold=True)
+        add_bullet_list(self._slide, left_items, COL_L_LEFT, _emu(y + 0.55),
+                        COL_W, _emu(h - 0.55))
+        # Right
+        tb_r = add_tb(self._slide, COL_R_LEFT, _emu(y), COL_W, _emu(0.5))
+        set_text(tb_r.text_frame, right_title, sz=SZ_H3, bold=True)
+        add_bullet_list(self._slide, right_items, COL_R_LEFT, _emu(y + 0.55),
+                        COL_W, _emu(h - 0.55))
+        return self
+
+    def two_col_table_code(self, table_headers, table_rows, code_text):
+        """Two columns: table on left, code block on right."""
+        tbl_h = max(0.7, (len(table_rows) + 1) * 0.38 + 0.1)
+        code_lines = code_text.strip().count('\n') + 1
+        code_h = max(0.5, code_lines * 0.25 + 0.2)
+        h = max(tbl_h, code_h)
+        y = self._advance(h)
+        add_table(self._slide, table_headers, table_rows,
+                  COL_L_LEFT, _emu(y), COL_W, _emu(tbl_h))
+        add_code(self._slide, code_text,
+                 COL_R_LEFT, _emu(y), COL_W, _emu(code_h))
+        return self
+
+    def two_col_bullets_table(self, bullet_title, items, table_headers, table_rows):
+        """Two columns: bullet list on left, table on right."""
+        blt_h = max(0.5, len(items) * 0.38 + 0.1)
+        tbl_h = max(0.7, (len(table_rows) + 1) * 0.38 + 0.1)
+        h = max(blt_h + 0.5, tbl_h)
+        y = self._advance(h)
+        # Left: h3 + bullets
+        tb_l = add_tb(self._slide, COL_L_LEFT, _emu(y), COL_W, _emu(0.5))
+        set_text(tb_l.text_frame, bullet_title, sz=SZ_H3, bold=True)
+        add_bullet_list(self._slide, items, COL_L_LEFT, _emu(y + 0.55),
+                        COL_W, _emu(h - 0.55))
+        # Right: table
+        add_table(self._slide, table_headers, table_rows,
+                  COL_R_LEFT, _emu(y), COL_W, _emu(tbl_h))
+        return self
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -490,32 +735,59 @@ if __name__ == '__main__':
     import os
 
     prs, layout = create_presentation()
-    total = 3
+    total = 6
 
-    # Slide 1: Title
+    # ── Slide 1: Title (auto-layout, no coordinates) ──
     s = add_slide(prs, layout)
-    add_title(s, 'Presentation Title', top=Inches(2.0))
-    add_subtitle(s, 'Subtitle text here', top=Inches(2.8))
-    add_slide_num(s, 1, total)
+    Layout(s).title('Presentation Title').subtitle('Subtitle text here').slide_num(1, total)
 
-    # Slide 2: Section with content
+    # ── Slide 2: Section + content ──
     s = add_slide(prs, layout)
-    add_section(s, 'Section Title')
-    add_formula(s, 'Z = (d - delta) / sqrt(V)', Inches(0.5), Inches(1.15), Inches(12.3), Inches(0.75))
-    add_callout(s, 'Key Insight', 'This is an important callout box.',
-                Inches(0.5), Inches(2.2), Inches(12.3), Inches(1.0))
-    add_slide_num(s, 2, total)
+    lm = Layout(s)
+    lm.section('Section Title')
+    lm.formula('Z = (d - delta) / sqrt(V)')
+    lm.callout('Key Insight', 'This is an important callout box.')
+    lm.slide_num(2, total)
 
-    # Slide 3: Table + Code
+    # ── Slide 3: Two-column bullets + table ──
     s = add_slide(prs, layout)
-    add_section(s, 'Comparison')
-    add_table(s,
-        ['Method', 'MI Variance', 'CI Type'],
+    lm = Layout(s)
+    lm.h3('Clinical Trial Design')
+    lm.two_col_bullets_table(
+        'Key Features',
+        ['Phase III randomized trial', 'Primary endpoint: PFS', 'n = 350 per arm'],
+        ['Factor', 'Value'],
+        [['Design', '1:1 randomization'], ['Population', 'HER2-negative']],
+    )
+    lm.slide_num(3, total)
+
+    # ── Slide 4: Two-column table + code ──
+    s = add_slide(prs, layout)
+    lm = Layout(s)
+    lm.h3('Implementation')
+    lm.two_col_table_code(
+        ['Method', 'Variance', 'CI Type'],
         [['Wald-Rubin', 'Rubin', 'Wald'],
-         ['Proposed Score', 'Rubin', 'Score inversion']],
-        Inches(0.5), Inches(1.15), Inches(7.0), Inches(1.5))
-    add_code(s, 'x <- rnorm(100)\nmean(x)', Inches(8.0), Inches(1.15), Inches(4.8), Inches(1.2))
-    add_slide_num(s, 3, total)
+         ['Score', 'Rubin', 'Score inversion']],
+        'score_test <- function(d, V) {\n  Z <- d / sqrt(V)\n  2 * pnorm(-abs(Z))\n}',
+    )
+    lm.slide_num(4, total)
+
+    # ── Slide 5: Flow + Comparison ──
+    s = add_slide(prs, layout)
+    lm = Layout(s)
+    lm.h3('Workflow')
+    lm.flow(['Collect Data', 'MI (m=20)', 'Pool', 'Score Test'])
+    lm.comparison('Wald', ['Simple', 'May undercover'], 'Score', ['Precise', 'Better coverage'])
+    lm.slide_num(5, total)
+
+    # ── Slide 6: Summary ──
+    s = add_slide(prs, layout)
+    Layout(s).section('Summary').bullets([
+        'Auto-layout eliminates manual positioning',
+        'Height auto-estimated from content',
+        'Two-column helpers for common patterns',
+    ]).slide_num(6, total)
 
     # Save
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'example_output.pptx')

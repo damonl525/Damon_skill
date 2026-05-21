@@ -1,16 +1,9 @@
 ---
-# ═══════════════════════════════════════════════════════════════════════════════
-# CLAUDE OFFICE SKILL - Enhanced Metadata v2.0
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# Basic Information
 name: MD to PPTX/HTML
 description: "Convert structured Markdown documents to professional HTML or PPTX presentations with formulas, tables, code blocks, and callout boxes"
-version: "1.0"
+version: "1.1"
 author: damonl525
 license: MIT
-
-# Categorization
 category: document-conversion
 tags:
   - markdown
@@ -21,8 +14,6 @@ tags:
   - table
   - code-blocks
 department: Biostatistics
-
-# AI Model Compatibility
 models:
   recommended:
     - claude-sonnet-4
@@ -31,8 +22,6 @@ models:
     - claude-3-5-sonnet
     - gpt-4
     - gpt-4o
-
-# Skill Capabilities
 capabilities:
   - md-to-pptx
   - md-to-html
@@ -40,8 +29,6 @@ capabilities:
   - table-generation
   - code-block-rendering
   - callout-boxes
-
-# Language Support
 languages:
   - en
   - zh
@@ -49,260 +36,255 @@ languages:
 
 # MD to PPTX/HTML Presentation
 
-Convert structured Markdown documents into professional presentations. Optimized for technical/statistical content with formulas, comparison tables, code blocks, and callout boxes.
+Convert structured Markdown into professional presentations. Optimized for technical/statistical content.
 
-## Design Philosophy
+Style: clean, information-dense, green accent theme, left accent bar, no animations.
 
-**Dense technical content, not marketing fluff.**
+---
 
-This skill targets internal knowledge sharing (stats team meetings, methodology reviews, journal club presentations). The style is:
-- Clean, minimal, no animations
-- Information-dense slides (not one sentence per slide)
-- Formula boxes with green accent background
-- Tables with green headers, alternating row shading
-- Code blocks in monospace with light gray background
-- Callout boxes (green for info, red for warnings)
-- Left accent bar on every slide
+## PPTX API Reference
 
-## Visual Style Constants
-
-These constants define the Damon style. Use them consistently across all output formats.
-
-### Color Palette
-
-```
-ACCENT       = #2D6A4F  (dark green — headers, bars, section dividers)
-ACCENT_LIGHT = #40916C  (medium green — borders, sub-headers)
-ACCENT_BG    = #D8F3DC  (light green — formula backgrounds, callout fills)
-WHITE        = #FFFFFF
-BLACK        = #1A1A2E  (near-black — body text)
-GRAY         = #6C757D  (slide numbers, subtitles)
-RED          = #D00000  (warning callout accent)
-RED_BG       = #FCE4E4  (warning callout background)
-CODE_BG      = #F0F0F0  (code block background)
-BORDER       = #DEE2E6  (code/table borders)
-DARK_GREEN   = #1B4332  (formula text color)
-DARK_RED     = #641220  (warning callout text)
+**MANDATORY:** Start every script with:
+```python
+from references.pptx_helpers import *
 ```
 
-### Typography (PPTX)
+### Auto-Layout API (Recommended)
 
-```
-FONT_MAIN    = 微软雅黑      (all non-code text)
-FONT_CODE    = Consolas      (code blocks, formulas)
+Use `Layout(slide)` to add elements sequentially — **no coordinates needed**.
+Tracks Y cursor, auto-estimates height from content. Chain methods fluently.
 
-SZ_TITLE     = 38pt  (slide big title)
-SZ_SECTION   = 32pt  (section heading)
-SZ_SUBTITLE  = 22pt  (subtitle)
-SZ_H3        = 20pt  (sub-heading)
-SZ_BODY      = 17pt  (body text)
-SZ_BODY_SM   = 16pt  (body small)
-SZ_LIST      = 17pt  (list items)
-SZ_FORMULA   = 16pt  (formula text (Consolas))
-SZ_CODE      = 13pt  (code text (Consolas))
-SZ_CALLOUT_T = 16pt  (callout bold title)
-SZ_CALLOUT_B = 15pt  (callout body)
-SZ_TABLE_HDR = 15pt  (table header (white on green))
-SZ_TABLE_CELL= 14pt  (table cell
-SZ_SLIDE_NUM = 11pt  (slide number)
+```python
+s = add_slide(prs, layout)
+lm = Layout(s)
+lm.title("Title Text")          # No (left, top, w, h) needed
+lm.bullets(["item 1", "item 2"]) # Height auto-calculated
+lm.formula("E = mc²")
+lm.callout("Note", "Details")
+lm.slide_num(1, total)
 ```
 
-### Typography (HTML)
+#### Layout Methods
 
-```css
---font-main: '微软雅黑', 'Segoe UI', sans-serif;
---font-mono: 'Consolas', 'JetBrains Mono', monospace;
---accent: #2D6A4F;
---accent-light: #40916C;
---accent-bg: #D8F3DC;
-```
+| Method | Description |
+|--------|-------------|
+| `title(text)` | Large green title |
+| `subtitle(text)` | Gray subtitle |
+| `section(text)` | Section heading + green underline |
+| `h3(text)` | Bold sub-heading |
+| `bullets(items)` | Bullet list (auto-height) |
+| `formula(text)` | Formula box (green bg + left bar) |
+| `code(text)` | Code block (gray bg) |
+| `callout(title, body, warn=False)` | Info/warning callout |
+| `table(headers, rows)` | Table with green header |
+| `comparison(l_title, l_items, r_title, r_items)` | Red vs green comparison |
+| `flow(items)` | Flow diagram (auto-positioned) |
+| `two_col_bullets(lt, li, rt, ri)` | Two-column bullets |
+| `two_col_table_code(th, tr, code)` | Table left, code right |
+| `two_col_bullets_table(bt, bi, th, tr)` | Bullets left, table right |
+| `slide_num(num, total)` | Page number (no cursor advance) |
+| `gap(inches)` | Explicit vertical gap |
+| `remaining` | Remaining usable height (property) |
 
-### Slide Layout
-
-- **Dimensions**: 13.333" x 7.5" (16:9 widescreen)
-- **Left accent bar**: 0.06" wide, full height, ACCENT color
-- **Content area**: 0.5" left margin, 12.3" usable width
-- **Slide number**: bottom-right, "N / total" format
-- **Section heading**: 32pt bold + 3" green underline bar below
-
-### Layout Constants (for positioning)
-
-```
-CONTENT_LEFT = 0.5"      # Main content left margin
-CONTENT_WIDTH = 12.3"    # Main content usable width
-COL_L_LEFT   = 0.5"      # Left column start
-COL_R_LEFT   = 6.8"      # Right column start
-COL_W        = 5.8"      # Single column width
-```
-
-## PPTX Helper API Reference
-
-When generating gen_pptx.py, import helpers from `references/pptx_helpers.py`. Available functions:
+### Low-level Functions (Advanced)
 
 ```python
 # Setup
-create_presentation()          → (prs, blank_layout)
+create_presentation()          -> (prs, blank_layout)
 
-# Slide creation
-add_slide(prs, layout)         → slide
+# Slide
+add_slide(prs, layout)         -> slide
 
-# Text elements
-add_title(slide, text, top=0.4")
-add_subtitle(slide, text, top=1.1")
-add_section(slide, text, top=0.25")
+# Text
+add_title(slide, text, top=0.4)
+add_subtitle(slide, text, top=1.1)
+add_section(slide, text, top=0.25)    # Green underline bar
+add_h3(slide, text, top=0.3)          # Bold sub-heading
 add_slide_num(slide, num, total)
 
-# Rich elements
+# Content
 add_formula(slide, text, left, top, width, height)
 add_code(slide, text, left, top, width, height)
 add_callout(slide, title, body, left, top, width, height, warn=False)
 add_table(slide, headers, rows, left, top, width, height)
-add_bullet_list(slide, items, left, top, width, height, ...)
+add_bullet_list(slide, items, left, top, width, height, sz=17, bold=False)
 
-# Composite elements
-add_flow_boxes(slide, items, top, box_height=0.9")
-add_comparison(slide, left_title, left_items, right_title, right_items, ...)
+# Composite
+add_flow_boxes(slide, items, top, box_height=0.9)
+add_comparison(slide, left_title, left_items, right_title, right_items,
+               left_pos=0.5, right_pos=6.8, top=4.9, width=5.8, height=2.0,
+               left_warn=True)
 
-# Low-level helpers
+# Low-level
 add_bg(slide, left, top, w, h, fill, border_color=None)
-set_text(tf, text, sz, bold, color, align)
-add_para(tf, text, sz, bold, color, align, sb)
+add_tb(slide, left, top, width, height) -> textbox
+set_text(tf, text, sz=SZ_BODY, bold=False, color=BLACK, align=LEFT)
+add_para(tf, text, sz=SZ_BODY, bold=False, color=BLACK, align=LEFT, sb=Pt(5))
 ```
 
-## Slide Element Types
-
-### 1. Title Slide
-- Large title (38pt, ACCENT, bold)
-- Subtitle (22pt, GRAY)
-- Optional: reference citation in italic, goal list
-
-### 2. Section Slide (divider)
-- Section title (32pt bold, BLACK)
-- Green underline bar (3" wide)
-- Start of a new topic section
-
-### 3. Content Slide with Two Columns
-- Left column: 0.5" to 6.3" (width 5.8")
-- Right column: 6.8" to 12.6" (width 5.8")
-- Each column has its own heading (H3, ACCENT_LIGHT) + body
-
-### 4. Formula Box
-- Rounded rectangle with ACCENT_BG fill + ACCENT_LIGHT border
-- Left green accent bar (0.05" wide)
-- Consolas font, DARK_GREEN color
-- Multi-line formulas supported
-
-### 5. Code Block
-- Rounded rectangle with CODE_BG fill + BORDER border
-- Consolas font, BLACK color
-- 0pt line spacing for dense code display
-
-### 6. Table
-- Header row: ACCENT background, white bold text
-- Data rows: alternating white / #F8F9FA
-- SZ_TABLE_HDR for headers, SZ_TABLE_CELL for data
-
-### 7. Callout Box (Info)
-- ACCENT_BG background, ACCENT_LIGHT border
-- Bold title (ACCENT color) + body text (DARK_GREEN)
-
-### 8. Callout Box (Warning)
-- RED_BG background, RED border
-- Bold title (DARK_RED) + body text (DARK_RED)
-
-### 9. Flow Diagram
-- Rounded rectangles (ACCENT_BG) with ACCENT bold text
-- Arrow shapes between boxes (ACCENT fill)
-- Horizontal layout, centered vertically
-
-### 10. Comparison (vs.)
-- Left: RED_BG box (negative/weaker method)
-- Right: ACCENT_BG box (positive/stronger method)
-- "vs." label centered between them
-
-## Workflow
-
-### Step 1: Parse the MD Source
-
-Read the source Markdown file and identify structural elements:
+### Constants
 
 ```
-# / ## / ###  → Title / Section / H3
-**bold**      → emphasis in body
-> quote       → callout box
-```code```     → code block
-| table |     → data table
-$ / $$        → formula box (inline/display math)
+Colors:    ACCENT, ACCENT_LIGHT, ACCENT_BG, WHITE, BLACK, GRAY,
+           RED, RED_BG, CODE_BG, BORDER, DARK_GREEN, DARK_RED
+
+Alignment: LEFT, CENTER, RIGHT
+
+Sizes:     SZ_TITLE(38), SZ_SECTION(32), SZ_SUBTITLE(22), SZ_H3(20),
+           SZ_BODY(17), SZ_BODY_SM(16), SZ_LIST(17), SZ_FORMULA(16),
+           SZ_CODE(13), SZ_CALLOUT_TITLE(16), SZ_CALLOUT_BODY(15),
+           SZ_TABLE_HDR(15), SZ_TABLE_CELL(14), SZ_SLIDE_NUM(11)
+
+Layout:    CONTENT_LEFT(0.5"), CONTENT_WIDTH(12.3"),
+           COL_L_LEFT(0.5"), COL_R_LEFT(6.8"), COL_W(5.8")
 ```
 
-### Step 2: Plan Slide Structure
+### Rules
 
-#### Splitting Rules
+1. ALWAYS start with `from references.pptx_helpers import *`
+2. ALWAYS use `Layout(s)` after `add_slide()` — let it handle positioning
+3. NEVER specify coordinates manually unless using low-level functions for two-column
+4. NEVER redefine any function listed above (no `def _emu`, `def create_presentation`, etc.)
+5. NEVER use raw python-pptx API (no `.add_textbox`, `.add_shape`, `.add_table` on slide)
+6. NEVER copy helper code inline — just import and call
+7. Only the functions listed above exist — do NOT invent new ones
 
-Follow these concrete rules to decide what goes on each slide:
+### Common Mistakes (MUST AVOID)
 
-1. **`# Title`** → Always becomes a Title Slide (first slide)
-   - Include: main title + subtitle + 3-5 objectives as numbered list
-2. **`## Section`** → Section divider slide with green underline
-   - Reset the visual rhythm for the audience
-3. **`### Sub` + content** → Content slide
-   - **Max 6 bullet points** per slide. If more, split into two slides sharing the same section heading.
-   - **Max 3 formula boxes** per slide. If more, split and use "（续）" in section title.
-   - **1 table** per slide (tables wider than 4 columns need full width — no two-column layout).
-   - **Max 2 code blocks** per slide (use two-column layout: code left, explanation right).
-4. **Blockquote `>`** → Always becomes a callout box. Place at the bottom of the current slide.
-5. **Overflow rule**: If a section's content exceeds one slide's capacity, create additional content slides with abbreviated section headers (no green underline repeat — just continue with `###` headings).
+**Use Layout — do NOT manually position elements:**
 
-#### Slide ordering template
+    ❌  add_title(s, "Title", 0.4)
+        add_bullet_list(s, ["a", "b"], 0.5, 1.3, 12.3, 1.5)  # manual coordinates
+    ✅  lm = Layout(s)
+        lm.title("Title")
+        lm.bullets(["a", "b"])                                 # auto-positioned
 
+**add_slide vs add_title — DIFFERENT functions:**
+
+    ❌  s = add_slide(s, "Title Text", 0.4)               # WRONG
+    ✅  s = add_slide(prs, layout)                        # create slide first
+        lm = Layout(s)
+        lm.title("Title Text")                            # Layout handles position
+
+**NEVER use raw python-pptx API on slide objects:**
+
+    ❌  s.add_textbox(...)  /  s.shapes.add_shape(...)
+    ✅  Use Layout methods or helper functions
+
+**NEVER redefine helper functions:**
+
+    ❌  def _emu(v): ...  /  def add_title(...): ...
+    ✅  from references.pptx_helpers import *
+
+### Complete Example
+
+```python
+from references.pptx_helpers import *
+
+prs, layout = create_presentation()
+total = 8
+
+# ── Slide 1: Title ──
+s = add_slide(prs, layout)
+lm = Layout(s)
+lm.title("Score Method for Missing Data")
+lm.subtitle("Rubin's Rules & Variance Estimation")
+lm.bullets([
+    "Objective 1: Derive score test statistic",
+    "Objective 2: Compare with Wald-Rubin method",
+    "Objective 3: Simulation study under MAR"
+])
+lm.slide_num(1, total)
+
+# ── Slide 2: Section divider ──
+s = add_slide(prs, layout)
+Layout(s).section("1. Background").slide_num(2, total)
+
+# ── Slide 3: Two-column bullets + table ──
+s = add_slide(prs, layout)
+lm = Layout(s)
+lm.h3("1.1 Clinical Trial Scenario")
+lm.two_col_bullets_table(
+    "Key Design",
+    ["Phase III randomized trial", "Primary endpoint: PFS", "n = 350 per arm"],
+    ["Factor", "Value"],
+    [["Design", "1:1 randomization"], ["Population", "HER2-negative"], ["Follow-up", "24 months"]]
+)
+lm.callout("Note", "Key assumption: MAR holds for missing data mechanism.")
+lm.slide_num(3, total)
+
+# ── Slide 4: Formulas ──
+s = add_slide(prs, layout)
+lm = Layout(s)
+lm.h3("1.2 Score Statistic")
+lm.formula("D = d - delta_0")
+lm.formula("Z = D / sqrt(V_total)")
+lm.callout("Key", "V_total = V_W + (1 + 1/m) * V_B (Rubin's variance)")
+lm.slide_num(4, total)
+
+# ── Slide 5: Code + Table ──
+s = add_slide(prs, layout)
+lm = Layout(s)
+lm.h3("1.3 Implementation")
+lm.two_col_table_code(
+    ["Method", "Variance", "CI Type"],
+    [["Wald-Rubin", "Rubin", "Wald"],
+     ["Score", "Rubin", "Score inversion"]],
+    "score_test <- function(d, V) {\n  Z <- d / sqrt(V)\n  2 * pnorm(-abs(Z))\n}"
+)
+lm.slide_num(5, total)
+
+# ── Slide 6: Comparison ──
+s = add_slide(prs, layout)
+lm = Layout(s)
+lm.h3("1.4 Method Comparison")
+lm.comparison(
+    "Wald-Rubin", ["Symmetric CI", "May undercover", "Simple to compute"],
+    "Score Test", ["Asymmetric CI", "Better coverage", "Requires score derivation"]
+)
+lm.slide_num(6, total)
+
+# ── Slide 7: Flow diagram ──
+s = add_slide(prs, layout)
+lm = Layout(s)
+lm.h3("1.5 Analysis Workflow")
+lm.flow(["Collect Data", "Apply MI (m=20)", "Pool Estimates", "Score Test"])
+lm.slide_num(7, total)
+
+# ── Slide 8: Summary ──
+s = add_slide(prs, layout)
+lm = Layout(s)
+lm.section("Summary")
+lm.bullets([
+    "Score method provides better small-sample coverage",
+    "Rubin's variance decomposition is the foundation",
+    "Simulation confirms robustness under MAR",
+    "Recommended for regulatory submissions"
+])
+lm.slide_num(8, total)
+
+prs.save("output.pptx")
 ```
-Slide 1:      Title (topic + subtopic + objectives)
-Slide 2:      Background / Problem Setup
-Slide 3..N:   Core Content (one section divider + 2-4 content slides per topic)
-Slide N+1:    Comparison Table (methods, tools, or approaches side-by-side)
-Slide N+2:    Practical Recommendations / Takeaways
-Slide Last:   Summary (3-5 key points + references)
-```
 
-Typical range: 12-25 slides for a 20-40 minute talk.
+---
 
-### Step 3: Generate Output
+## HTML Path
 
-#### PPTX Path (default)
+Generate a single HTML file using these CSS classes from `references/html_template.html`:
 
-1. Read `references/pptx_helpers.py` for the helper function library
-2. Generate a Python script (e.g., `gen_pptx.py`) in the working directory that:
-   - Imports the standard helpers
-   - Contains slide-specific content code
-   - Saves to a `.pptx` file in the same directory
-3. Run: `python gen_pptx.py`
-4. Dependencies: `pip install python-pptx`
+- `.slide` — each slide container
+- `.formula` — formula box (green bg + left bar)
+- `.callout-key` / `.callout-warn` — info/warning callout
+- `.cols` > `.col` — two-column layout
+- `.compare` > `.compare-negative` + `.compare-positive` — comparison boxes
+- `.flow` > `.flow-box` + `.flow-arrow` — flow diagram
+- `<table>` with `<th>` — auto-styled green header tables
+- `<pre><code>` — code blocks
+- `.slide-num` — bottom-right page number
 
-> **Note**: All position/size parameters in helpers now auto-convert bare `int`/`float` to `Inches()` via the internal `_emu()` function. You can safely pass `0.5` or `Inches(0.5)` — both work. This prevents the common bug where a bare number is treated as EMU (invisible on slide).
+No external dependencies. Open in browser, Ctrl+P to print/export PDF.
 
-#### HTML Path
-
-1. Read `references/html_template.html` for the complete CSS/HTML framework
-2. Generate a single HTML file using the template's CSS classes:
-   - `.slide` — each slide container
-   - `.formula` — formula box (green bg + left bar)
-   - `.callout-key` / `.callout-warn` — info/warning callout
-   - `.cols` > `.col` — two-column layout
-   - `.compare` > `.compare-negative` + `.compare-positive` — comparison boxes
-   - `.flow` > `.flow-box` + `.flow-arrow` — flow diagram
-   - `<table>` with `<th>` — auto-styled green header tables
-   - `<pre><code>` — code blocks
-   - `.slide-num` — bottom-right page number
-3. Open in browser, Ctrl+P to print/export PDF
-4. No external dependencies
-
-### Step 4: Verify
-
-After generating:
-- PPTX: Open and check all slides render correctly
-- HTML: Open in browser and check layout + print preview
-- Verify all formulas, tables, and code blocks are present
-- Check slide numbering is correct
+---
 
 ## MD Parsing Rules
 
@@ -312,79 +294,50 @@ After generating:
 - `### Sub` → H3 sub-heading within a content slide
 
 ### Formulas
-- Inline math `$...$` or display math `$$...$$` → Formula box
-- Multiple sequential formulas → Stack vertically with 0.1" gap (PPTX) or sequential `.formula` divs (HTML)
-- **Rendering strategy**: Use Unicode math symbols — no MathJax/KaTeX dependency
-  - Greek: α β γ δ θ λ μ π σ φ ψ ω (upper: Σ Δ Ω Φ)
-  - Operators: ± × · ÷
-  - Relations: ≤ ≥ ≠ ≈
-  - Misc: Σ √ ∂ ∞ →
-  - Subscripts: use Unicode where available (₁ ₂ ₃ ₕ ₖ), otherwise use `_h` notation
-  - Superscripts: use Unicode where available (² ³), otherwise use `^2` notation
-- **Fallback**: For complex LaTeX that cannot be expressed in Unicode, display the LaTeX source verbatim in the formula box (readers will understand)
+- `$...$` or `$$...$$` → Formula box
+- Rendering: Use Unicode math symbols (α β γ ± × ≤ ≥ ≠ Σ √ ∞ → ² ³ ₁ ₂)
+- Fallback: For complex LaTeX, display source verbatim
 
 ### Tables
-- Standard Markdown pipe tables → Table element
+- Markdown pipe tables → `add_table()`
 - First row is header
-- Ensure enough vertical space (2" minimum for 5+ rows)
 
 ### Code Blocks
-- Fenced with ``` → Code block element
-- Language tag preserved as visual label
+- Fenced ``` → `add_code()`
 
 ### Blockquotes
-- `>` prefixed lines → Callout box
-- If content contains "注意", "警告", "Warning", "Caution" → Warning style (red)
-- Otherwise → Info style (green)
+- `>` → `add_callout()`
+- Contains "注意"/"警告"/"Warning" → `warn=True`
 
 ### Lists
-- `- item` or `* item` → Bullet list items
-- `1. item` → Numbered list items
-- Preserve nesting (2-space indent)
+- `- item` / `* item` → `add_bullet_list()`
+- `1. item` → numbered list
 
-## Example: MD → Slide Mapping
+---
 
-See `example.md` for a complete input example. Here is how it maps to slides:
+## Slide Splitting Rules
 
-| MD Section | Slide Type | Element Count |
-|------------|------------|---------------|
-| `# Score Method for MI` + Objectives list | Title Slide | h1 + subtitle + numbered list |
-| `## Background` | Section Divider | h2 + green underline |
-| `### Clinical Trial Scenario` + `### Required Output` | Content (two-column) | 2x H3 + bullet lists |
-| `> Core question...` | Callout (info) | Green callout box at bottom |
-| `## Method Overview` | Section Divider + Content | h2 + numbered list + callout |
-| `## Complete Data MN Score Method` | Content (formula-heavy) | 3 formula boxes + callout + H3 + bullets |
-| `## Constrained MLE` + code block | Content (code + table) | code block left + table right + warning callout |
-| `## Method Comparison` | Content (table) | full-width table + callout |
-| `## Summary` | Content (closing) | numbered list + small table + callout |
+1. `# Title` → Title slide (first slide, include 3-5 objectives)
+2. `## Section` → Section divider with green underline
+3. `### Sub + content` → Content slide
+   - Max 6 bullet points per slide (split if more)
+   - Max 3 formula boxes per slide (split if more)
+   - 1 table per slide
+   - Max 2 code blocks per slide
+4. `>` blockquote → Callout at bottom of current slide
+5. Overflow → Continue with `###` headings, add "（续）" to title
 
-This example.md (82 lines) produces approximately **8-10 slides**.
+Slide ordering: Title → Background → Core Content (section + 2-4 slides each) → Comparison → Takeaways → Summary
 
-## Customization Points
+Typical range: 12-25 slides for 20-40 minute talk.
 
-The user may request adjustments to:
-- **Color scheme**: Replace ACCENT/ACCENT_LIGHT/ACCENT_BG with new values
-- **Font**: Replace 微软雅黑 with another font family
-- **Font sizes**: Scale all sizes proportionally
-- **Slide count**: Merge or split slides as needed
-- **Language**: Content stays in source language; UI elements (slide numbers, section labels) match
+---
 
-## Anti-Patterns (Avoid)
+## Anti-Patterns
 
-- One sentence per slide (too sparse for technical content)
-- Clip art, stock photos, or decorative elements
+- One sentence per slide
+- Decorative elements (clip art, stock photos)
 - Animations or transitions
-- Dark backgrounds with light text
-- More than 3 font families on a slide
-- Untagged callout boxes (always use info or warning style)
-- Tables without headers
-- Code blocks without background shading
-
-## Integration with Other Skills
-
-- **PDF Batch Extractor**: Extract PDF content to MD, then convert to PPTX
-- **Statistical Review Summary**: Convert summary MD to presentation for team meeting
-
-## Version History
-
-- **v1.0** (2026-05-14): Initial release with PPTX + HTML dual output
+- Dark backgrounds
+- More than 3 font families
+- Untagged callouts or headerless tables
